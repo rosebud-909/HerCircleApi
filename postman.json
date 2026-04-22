@@ -1,0 +1,475 @@
+{
+  "info": {
+    "name": "HerCircle API (local)",
+    "_postman_id": "7c2f0c2b-0c6a-4c6b-9f2a-000000000001",
+    "description": "Import this into Postman.\n\nSet collection variables:\n- baseUrl (default http://localhost:3000)\n- firebaseIdToken (paste a Firebase ID token)\n- exampleUserId / exampleRequestId (IDs from your data, e.g. feed or POST responses)\n\nNotes:\n- Protected routes require: Authorization: Bearer {{firebaseIdToken}}\n- Use the Firebase Auth folder first (signUp or signIn) to populate firebaseIdToken.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "firebaseApiKey", "value": "" },
+    { "key": "firebaseEmail", "value": "" },
+    { "key": "firebasePassword", "value": "" },
+    { "key": "firebaseIdToken", "value": "" },
+    { "key": "exampleUserId", "value": "" },
+    { "key": "exampleRequestId", "value": "" },
+    { "key": "chatId", "value": "" },
+    { "key": "sosId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Firebase Auth (REST) — get ID token",
+      "item": [
+        {
+          "name": "POST Firebase signUp (email/password)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{firebaseEmail}}\",\n  \"password\": \"{{firebasePassword}}\",\n  \"returnSecureToken\": true\n}"
+            },
+            "url": "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={{firebaseApiKey}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.idToken) {",
+                  "  pm.collectionVariables.set('firebaseIdToken', json.idToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Firebase signInWithPassword (email/password)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{firebaseEmail}}\",\n  \"password\": \"{{firebasePassword}}\",\n  \"returnSecureToken\": true\n}"
+            },
+            "url": "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={{firebaseApiKey}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.idToken) {",
+                  "  pm.collectionVariables.set('firebaseIdToken', json.idToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth / Profile",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/register (create/update profile)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarah Johnson\",\n  \"email\": \"sarah@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/google (create/update profile)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarah Johnson\",\n  \"email\": \"sarah.johnson@gmail.com\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/google"
+          }
+        },
+        {
+          "name": "POST /api/v1/users/me (create/update profile)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sarah Johnson\",\n  \"email\": \"sarah@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/me"
+          }
+        },
+        {
+          "name": "GET /api/v1/users/me",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/me"
+          }
+        },
+        {
+          "name": "PATCH /api/v1/users/me",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bio\": \"Happy to help neighbors when I can.\",\n  \"location\": \"Lincoln Park, Chicago\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/me"
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/logout",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users (public)",
+      "item": [
+        {
+          "name": "GET /api/v1/users/:id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{exampleUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{exampleUserId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Requests",
+      "item": [
+        {
+          "name": "GET /api/v1/requests (feed)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/requests?status=open&sortBy=urgency&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "requests"],
+              "query": [
+                { "key": "category", "value": "", "disabled": true },
+                { "key": "requestType", "value": "", "disabled": true },
+                { "key": "status", "value": "open" },
+                { "key": "sortBy", "value": "urgency" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/requests/:id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/requests/{{exampleRequestId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "requests", "{{exampleRequestId}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/requests",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"other\",\n  \"requestType\": \"housing\",\n  \"description\": \"Need a safe place to stay for the night.\",\n  \"urgency\": \"high\",\n  \"location\": \"West Loop, Chicago\",\n  \"isAnonymous\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/requests"
+          }
+        },
+        {
+          "name": "PATCH /api/v1/requests/:id/status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"fulfilled\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/requests/{{exampleRequestId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "requests", "{{exampleRequestId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/users/me/requests",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/me/requests"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Verification",
+      "item": [
+        {
+          "name": "POST /api/v1/verification/submit (multipart)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "governmentIdFront", "type": "file", "src": "" },
+                { "key": "governmentIdBack", "type": "file", "src": "" },
+                { "key": "selfieImage", "type": "file", "src": "" },
+                { "key": "ssn", "type": "text", "value": "123-45-6789" },
+                { "key": "dateOfBirth", "type": "text", "value": "1990-01-01" },
+                { "key": "phoneNumber", "type": "text", "value": "(555) 555-5555" },
+                { "key": "addressStreet", "type": "text", "value": "123 Main St" },
+                { "key": "addressCity", "type": "text", "value": "Chicago" },
+                { "key": "addressState", "type": "text", "value": "IL" },
+                { "key": "addressZip", "type": "text", "value": "60606" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/verification/submit"
+          }
+        },
+        {
+          "name": "GET /api/v1/verification/status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/verification/status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chats",
+      "item": [
+        {
+          "name": "POST /api/v1/chats",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"requestId\": \"{{exampleRequestId}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/chats"
+          }
+        },
+        {
+          "name": "GET /api/v1/chats",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/chats"
+          }
+        },
+        {
+          "name": "GET /api/v1/chats/:chatId/messages",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chats/{{chatId}}/messages?page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "chats", "{{chatId}}", "messages"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/chats/:chatId/messages",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"On my way! Be there in 10 minutes.\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chats/{{chatId}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "chats", "{{chatId}}", "messages"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SOS",
+      "item": [
+        {
+          "name": "POST /api/v1/sos",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": \"West Loop, Chicago\",\n  \"message\": \"I feel unsafe\",\n  \"coordinates\": { \"lat\": 41.8827, \"lng\": -87.6474 }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/sos"
+          }
+        },
+        {
+          "name": "GET /api/v1/sos/active",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/sos/active"
+          }
+        },
+        {
+          "name": "PATCH /api/v1/sos/:id/message",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Being followed\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sos/{{sosId}}/message",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "sos", "{{sosId}}", "message"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/sos/:id/resolve",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/sos/{{sosId}}/resolve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "sos", "{{sosId}}", "resolve"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
