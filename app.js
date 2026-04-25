@@ -4,6 +4,9 @@ import v1 from './routes/v1.js';
 
 export async function createApp() {
   const app = express();
+  if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', 1);
+  }
   app.use(cors());
   app.use(express.json());
 

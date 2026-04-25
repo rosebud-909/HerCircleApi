@@ -16,6 +16,18 @@ function looksLikeAdminCredentialError(e) {
 }
 
 export async function requireAuth(req, res, next) {
+  // Automated tests only: never enable ALLOW_TEST_AUTH in deployed environments.
+  if (process.env.ALLOW_TEST_AUTH === 'true') {
+    const testUid = req.headers['x-test-user-id'];
+    if (typeof testUid === 'string' && testUid.trim()) {
+      req.userId = testUid.trim();
+      req.firebase = { uid: req.userId, email: null };
+      const out = next();
+      if (out && typeof out.then === 'function') await out;
+      return;
+    }
+  }
+
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized', code: 'unauthorized' });

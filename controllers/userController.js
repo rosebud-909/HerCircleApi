@@ -1,4 +1,5 @@
-import { getUserById, listMyRequests, listUsers, upsertUser } from '../store.js';
+import { getUserById, listChatsForUser, listMyRequests, listUsers, upsertUser } from '../store.js';
+import { communityConnectedUserIdsFromChats } from '../services/userConnections.js';
 import { ok, err } from '../utils/http.js';
 import { userMe, userPublic } from '../utils/presenters.js';
 
@@ -47,7 +48,9 @@ export async function getMe(req, res) {
   try {
     const u = await getUserById(req.userId);
     if (!u) return err(res, 'User not found', 404, 'not_found');
-    return ok(res, userMe(u));
+    const chats = await listChatsForUser(req.userId);
+    const connectedUserIds = communityConnectedUserIdsFromChats(chats, req.userId);
+    return ok(res, { ...userMe(u), connectedUserIds });
   } catch (_e) {
     return err(res, 'Internal error', 500, 'internal');
   }

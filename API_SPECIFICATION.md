@@ -5,6 +5,8 @@
 
 **Base URL:** `/api/v1`
 
+**Contract source:** This file is synced from the app repo at `HerCircle/src/docs/API_SPECIFICATION.md`. Edit there first, then copy into `HerCircleApi` so both stay identical.
+
 All endpoints require `Authorization: Bearer <firebase_id_token>` unless noted otherwise.
 
 **Authentication:** Firebase Auth ID tokens. The backend should verify tokens using the Firebase Admin SDK.
@@ -32,24 +34,24 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIs...
 
 ### `POST /auth/register`
 
-Create (or update) the current user's app profile after Firebase Auth signup/login.
-
-**Notes:**
-- The backend derives the user id from the verified Firebase token (`uid`). Do not send `firebaseUid`.
-- `location` is **not required** for signup/login and can be set later via `PATCH /users/me`.
+Register a new user profile after Firebase Auth account creation. *(Called after successful Firebase signup)*
 
 **Input:**
 ```json
 {
+  "firebaseUid": "abc123xyz",
   "name": "Sarah Johnson",
-  "email": "sarah@example.com"
+  "email": "sarah@example.com",
+  "location": "West Loop, Chicago"
 }
 ```
 
 | Field | Type | Required |
 |-------|------|----------|
+| `firebaseUid` | string | ✅ |
 | `name` | string | ✅ |
-| `email` | string | ❌ |
+| `email` | string | ✅ |
+| `location` | string | ✅ |
 
 **Response (201):**
 ```json
@@ -58,7 +60,7 @@ Create (or update) the current user's app profile after Firebase Auth signup/log
     "id": "abc123xyz",
     "name": "Sarah Johnson",
     "email": "sarah@example.com",
-    "location": null,
+    "location": "West Loop, Chicago",
     "bio": null,
     "verificationStatus": "unverified",
     "createdAt": "2026-04-21T12:00:00.000Z"
@@ -123,10 +125,13 @@ Get the current user's full profile.
     "bio": "Happy to help neighbors when I can.",
     "verificationStatus": "verified",
     "verifiedAt": "2026-04-15T10:00:00.000Z",
-    "createdAt": "2026-04-08T12:00:00.000Z"
+    "createdAt": "2026-04-08T12:00:00.000Z",
+    "connectedUserIds": ["u2", "u3"]
   }
 }
 ```
+
+`connectedUserIds` (optional): user ids the current user has **community-connected** with (for “Connected” badges on Community). Can be omitted if the client derives connections from `GET /chats` instead.
 
 ---
 
@@ -173,8 +178,8 @@ Get a public user profile (limited fields).
 ```json
 {
   "data": {
-    "id": "user_other",
-    "name": "Alex",
+    "id": "u2",
+    "name": "Elena",
     "location": "West Loop, Chicago",
     "verificationStatus": "pending",
     "createdAt": "2026-04-13T12:00:00.000Z"
@@ -257,8 +262,8 @@ List open help requests (feed). Supports filtering and pagination.
   "data": {
     "requests": [
       {
-        "id": "req_example",
-        "userId": "user_other",
+        "id": "r1",
+        "userId": "u2",
         "category": "menstrual",
         "requestType": null,
         "description": "Caught off guard at work and need a few pads to get through the day.",
@@ -268,8 +273,8 @@ List open help requests (feed). Supports filtering and pagination.
         "isAnonymous": false,
         "createdAt": "2026-04-18T10:00:00.000Z",
         "user": {
-          "id": "user_other",
-          "name": "Alex",
+          "id": "u2",
+          "name": "Elena",
           "verificationStatus": "verified"
         }
       }
@@ -293,8 +298,8 @@ Get a single request with full details.
 ```json
 {
   "data": {
-    "id": "req_example",
-    "userId": "user_other",
+    "id": "r1",
+    "userId": "u2",
     "category": "menstrual",
     "requestType": null,
     "description": "Caught off guard at work and need a few pads to get through the day.",
@@ -304,8 +309,8 @@ Get a single request with full details.
     "isAnonymous": false,
     "createdAt": "2026-04-18T10:00:00.000Z",
     "user": {
-      "id": "user_other",
-      "name": "Alex",
+      "id": "u2",
+      "name": "Elena",
       "verificationStatus": "verified"
     }
   }
@@ -378,7 +383,7 @@ Update a request's status. *(Owner only)*
 ```json
 {
   "data": {
-    "id": "req_example",
+    "id": "r1",
     "status": "fulfilled"
   }
 }
@@ -413,46 +418,85 @@ Get the current user's requests.
 
 ## 💬 Chats & Messages
 
+The product supports **two chat kinds** (same `messages` model; distinguish by whether a help request is attached):
+
+| Kind | `requestId` | Created from | Dedupe key (conceptual) |
+|------|----------------|--------------|-------------------------|
+| **Request** | Set to the help request id | “I Can Help” on a request | `(requestId, requestOwnerId, helperId)` — one thread per request + pair |
+| **Community** | `null` / omitted | Community → Connect with another member | `(peerA, peerB)` with no request — at most one DM per unordered pair |
+
+`GET /chats` and chat payloads should expose `requestId` as **nullable**. When `requestId` is null, the client shows the thread under **Community** (not “Re: … request”). Nested `request` in list responses should be **omitted or null** for community threads.
+
+---
+
 ### `POST /chats`
 
-Create a chat when offering help on a request. Returns existing chat if one already exists.
+Create or return an existing chat. **Exactly one** of the following shapes applies:
+
+#### A) Help request (existing behavior)
+
+Current user is the **helper**; the other participant is the **request owner** (derived from the request). Do not accept a separate “owner id” from the client for authorization—load the request server-side.
 
 **Input:**
 ```json
 {
-  "requestId": "req_example"
+  "requestId": "r1"
 }
 ```
 
 | Field | Type | Required |
 |-------|------|----------|
-| `requestId` | string | ✅ |
+| `requestId` | string | ✅ (for this shape) |
 
-**Response (201) — new chat:**
+#### B) Community direct message
+
+Current user starts (or reopens) a **1:1** thread with `peerUserId`. No help request is involved.
+
+**Input:**
+```json
+{
+  "peerUserId": "u2"
+}
+```
+
+| Field | Type | Required |
+|-------|------|----------|
+| `peerUserId` | string | ✅ (for this shape; must not equal current user) |
+
+**Validation (both shapes):**
+
+- Reject if the client sends **both** `requestId` and `peerUserId`, or **neither**.
+- Reject `peerUserId` equal to the authenticated user.
+- For **Community**: optionally enforce that `peerUserId` appears in the same **discoverable community** as the current user (same rules as `GET /community/members` — see below) so users cannot open DMs with arbitrary user IDs.
+- **Dedupe**: return **200** with the existing chat if it already exists (same rules as the table above).
+
+**Response (201) — new request-scoped chat:**
 ```json
 {
   "data": {
     "id": "c_1713456900",
-    "requestId": "req_example",
-    "participants": ["user_other", "abc123xyz"],
+    "requestId": "r1",
+    "participants": ["u2", "abc123xyz"],
     "lastMessage": null,
     "updatedAt": "2026-04-18T12:05:00.000Z"
   }
 }
 ```
 
-**Response (200) — existing chat:**
+**Response (201) — new community chat:**
 ```json
 {
   "data": {
-    "id": "c_existing123",
-    "requestId": "req_example",
-    "participants": ["user_other", "abc123xyz"],
-    "lastMessage": "I can bring some over!",
-    "updatedAt": "2026-04-18T11:00:00.000Z"
+    "id": "c_1713457001",
+    "requestId": null,
+    "participants": ["u2", "abc123xyz"],
+    "lastMessage": null,
+    "updatedAt": "2026-04-18T12:06:00.000Z"
   }
 }
 ```
+
+**Response (200) — existing chat** (same shape as above, whichever kind applies).
 
 ---
 
@@ -460,30 +504,76 @@ Create a chat when offering help on a request. Returns existing chat if one alre
 
 List all chats for the current user.
 
-**Response (200):**
+**Response (200):** entries may mix request-scoped and community threads.
+
 ```json
 {
   "data": [
     {
       "id": "c_1713456900",
-      "requestId": "req_example",
-      "participants": ["user_other", "abc123xyz"],
+      "requestId": "r1",
+      "participants": ["u2", "abc123xyz"],
       "lastMessage": "I can bring some over!",
       "updatedAt": "2026-04-18T12:10:00.000Z",
       "otherUser": {
-        "id": "user_other",
-        "name": "Alex",
+        "id": "u2",
+        "name": "Elena",
         "verificationStatus": "verified"
       },
       "request": {
-        "id": "req_example",
+        "id": "r1",
         "category": "menstrual",
         "description": "Caught off guard at work..."
       }
+    },
+    {
+      "id": "c_1713458000",
+      "requestId": null,
+      "participants": ["u3", "abc123xyz"],
+      "lastMessage": "Hey!",
+      "updatedAt": "2026-04-19T09:00:00.000Z",
+      "otherUser": {
+        "id": "u3",
+        "name": "Maya",
+        "verificationStatus": "unverified"
+      },
+      "request": null
     }
   ]
 }
 ```
+
+| Field | Notes |
+|-------|--------|
+| `requestId` | `null` = community DM |
+| `request` | Omitted or `null` when `requestId` is null |
+
+Sort by `updatedAt` descending (unchanged).
+
+---
+
+### `GET /community/members`
+
+List **discoverable** HerCircle members the current user may connect with (Community tab). This replaces loading “all users” on the client: the backend applies **privacy-preserving** filters (e.g. same metro / region derived from stored `location`, rate limits, blocklist later).
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "u2",
+      "name": "Elena",
+      "location": "West Loop, Chicago",
+      "bio": "Happy to help when I can.",
+      "verificationStatus": "verified"
+    }
+  ]
+}
+```
+
+Do **not** return email or internal ids beyond public `id`. The client uses this list for Connect; opening the chat uses `POST /chats` with `{ "peerUserId": "…" }`.
+
+**Optional:** include `isConnected: true` when a community DM already exists or you persist explicit “connections”; otherwise the client can infer from `GET /chats`.
 
 ---
 
@@ -513,7 +603,7 @@ Get messages for a specific chat.
       {
         "id": "m_002",
         "chatId": "c_1713456900",
-        "senderId": "user_other",
+        "senderId": "u2",
         "content": "Thank you so much! I'm near the library on State St.",
         "createdAt": "2026-04-18T12:07:00.000Z"
       }
@@ -690,8 +780,9 @@ Get active SOS alerts near the current user (for community awareness).
 | `POST` | `/requests` | Create request |
 | `PATCH` | `/requests/:id/status` | Update request status |
 | `GET` | `/users/me/requests` | My requests |
-| `POST` | `/chats` | Create/get chat |
+| `POST` | `/chats` | Create/get chat (request **or** community peer) |
 | `GET` | `/chats` | List my chats |
+| `GET` | `/community/members` | Discoverable members for Community tab |
 | `GET` | `/chats/:chatId/messages` | Get chat messages |
 | `POST` | `/chats/:chatId/messages` | Send message |
 | `POST` | `/sos` | Trigger SOS alert |
@@ -708,6 +799,10 @@ Get active SOS alerts near the current user (for community awareness).
 - All endpoints (except `/auth/register` and `/auth/google`) require a valid token
 - User ID is extracted from the verified token — never trust client-sent user IDs
 
+### Community & DMs
+- **`POST /chats` with `peerUserId`:** Never allow arbitrary user IDs without checks (same discoverable set as `GET /community/members`, blocks, etc.) to reduce harassment and enumeration.
+- **`GET /community/members`:** Rate-limit and avoid returning full user tables; location matching should use normalized regions you control, not raw address strings from clients.
+
 ### Data Protection
 - **SSN** must be encrypted at rest (AES-256); only store last 4 digits after verification
 - **Government ID images** stored in encrypted cloud storage with time-limited access URLs
@@ -722,6 +817,8 @@ Get active SOS alerts near the current user (for community awareness).
 | `/sos` | 3 per hour per user |
 | `/verification/submit` | 3 per day per user |
 | `/chats/:chatId/messages` | 60 per minute per user |
+| `POST /chats` | 20 per minute per user (tune as needed) |
+| `GET /community/members` | 30 per minute per user |
 
 ### Categories & Types
 **Categories:** `menstrual`, `food`, `hygiene`, `kids`, `transport`, `errands`, `other`

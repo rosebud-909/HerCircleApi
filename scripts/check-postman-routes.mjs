@@ -19,6 +19,7 @@ const V1_MOUNTS = [
   { mount: '/verification', file: 'routes/verification.routes.js' },
   { mount: '/requests', file: 'routes/requests.routes.js' },
   { mount: '/chats', file: 'routes/chats.routes.js' },
+  { mount: '/community', file: 'routes/community.routes.js' },
   { mount: '/sos', file: 'routes/sos.routes.js' },
 ];
 

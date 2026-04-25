@@ -13,6 +13,7 @@
     { "key": "firebaseIdToken", "value": "" },
     { "key": "exampleUserId", "value": "" },
     { "key": "exampleRequestId", "value": "" },
+    { "key": "peerUserId", "value": "" },
     { "key": "chatId", "value": "" },
     { "key": "sosId", "value": "" }
   ],
@@ -354,7 +355,7 @@
       "name": "Chats",
       "item": [
         {
-          "name": "POST /api/v1/chats",
+          "name": "POST /api/v1/chats (request)",
           "request": {
             "auth": {
               "type": "bearer",
@@ -363,6 +364,19 @@
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{\n  \"requestId\": \"{{exampleRequestId}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/chats"
+          }
+        },
+        {
+          "name": "POST /api/v1/chats (community peer)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"peerUserId\": \"{{peerUserId}}\"\n}" },
             "url": "{{baseUrl}}/api/v1/chats"
           }
         },
@@ -413,6 +427,23 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "chats", "{{chatId}}", "messages"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Community",
+      "item": [
+        {
+          "name": "GET /api/v1/community/members",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/community/members"
           }
         }
       ]

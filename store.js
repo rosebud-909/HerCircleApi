@@ -1,10 +1,12 @@
 import { useFirestore } from './dbMode.js';
 import { nextId, store as memoryStore } from './memoryStore.js';
+import { chatPairKey } from './lib/chatPairKey.js';
 import {
   fsAppendMessage,
   fsCreateChat,
   fsCreateRequest,
   fsCreateSos,
+  fsFindChatForCommunityPeers,
   fsFindChatForRequest,
   fsGetChat,
   fsGetRequest,
@@ -122,6 +124,15 @@ export async function findChatForRequest({ requestId, ownerId, helperId }) {
     if (c.requestId === requestId && c.participants.includes(ownerId) && c.participants.includes(helperId)) {
       return c;
     }
+  }
+  return null;
+}
+
+export async function findChatForCommunityPeers(userIdA, userIdB) {
+  if (useFirestore()) return fsFindChatForCommunityPeers({ userIdA, userIdB });
+  const key = chatPairKey(userIdA, userIdB);
+  for (const c of memoryStore.chats.values()) {
+    if (c.communityPairKey === key) return c;
   }
   return null;
 }

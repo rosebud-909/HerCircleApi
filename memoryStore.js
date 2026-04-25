@@ -11,3 +11,13 @@ export const store = {
   messages: new Map(),
   sos: [],
 };
+
+/** Clears in-memory data (for tests only; never call in production). */
+export function resetMemoryStore() {
+  store.users.clear();
+  store.requests.length = 0;
+  store.chats.clear();
+  store.messages.clear();
+  store.sos.length = 0;
+}
+

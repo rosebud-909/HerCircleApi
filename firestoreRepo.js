@@ -1,4 +1,5 @@
 import { getFirebaseAdminFirestore } from './firebaseAdmin.js';
+import { chatPairKey as pairKey } from './lib/chatPairKey.js';
 
 const USERS = 'users';
 const REQUESTS = 'requests';
@@ -24,10 +25,6 @@ export function requestSortKeys({ urgency, createdAt }) {
   // Higher is newer for createdAt sorting.
   const createdAtSortKey = safeCreatedMs * 10 + (2 - ur);
   return { urgencySortKey, createdAtSortKey, urgencyRank: ur, createdAtMs: safeCreatedMs };
-}
-
-function chatPairKey(a, b) {
-  return [String(a), String(b)].sort().join('__');
 }
 
 export async function fsGetUser(userId) {
@@ -97,14 +94,22 @@ export async function fsGetChat(chatId) {
 
 export async function fsFindChatForRequest({ requestId, ownerId, helperId }) {
   const qs = await db().collection(CHATS).where('requestId', '==', String(requestId)).limit(25).get();
-  const pair = chatPairKey(ownerId, helperId);
+  const pair = pairKey(ownerId, helperId);
   for (const d of qs.docs) {
     const c = { id: d.id, ...d.data() };
-    if (Array.isArray(c.participants) && chatPairKey(c.participants[0], c.participants[1]) === pair) {
+    if (Array.isArray(c.participants) && pairKey(c.participants[0], c.participants[1]) === pair) {
       return c;
     }
   }
   return null;
+}
+
+export async function fsFindChatForCommunityPeers({ userIdA, userIdB }) {
+  const key = pairKey(userIdA, userIdB);
+  const qs = await db().collection(CHATS).where('communityPairKey', '==', key).limit(1).get();
+  if (qs.empty) return null;
+  const d = qs.docs[0];
+  return { id: d.id, ...d.data() };
 }
 
 export async function fsCreateChat(chat) {
@@ -164,10 +169,15 @@ export async function fsUpdateSos(sosId, patch) {
 }
 
 export async function fsListActiveSos() {
-  const qs = await db().collection(SOS).where('status', '==', 'active').orderBy('createdAt', 'desc').limit(200).get();
+  const qs = await db()
+    .collection(SOS)
+    .where('status', '==', 'active')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .get();
   return qs.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-// Firestore requires composite indexes for some queries. If a query fails at runtime,
-// create the suggested index from the error URL, or temporarily set USE_FIRESTORE=false.
+// List queries use orderBy with composite indexes from `firestore.indexes.json`.
+// If a query fails with a missing-index URL, deploy indexes and wait until Enabled.
 
