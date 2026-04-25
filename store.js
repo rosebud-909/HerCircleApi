@@ -10,6 +10,7 @@ import {
   fsGetRequest,
   fsGetSos,
   fsGetUser,
+  fsListUsers,
   fsListActiveSos,
   fsListChatsForUser,
   fsListMessages,
@@ -27,6 +28,17 @@ export { nextId };
 export async function getUserById(userId) {
   if (useFirestore()) return fsGetUser(userId);
   return memoryStore.users.get(userId) ?? null;
+}
+
+export async function listUsers() {
+  if (useFirestore()) return fsListUsers();
+  const rows = [...memoryStore.users.values()];
+  rows.sort((a, b) => {
+    const tb = Date.parse(String(b.createdAt || 0));
+    const ta = Date.parse(String(a.createdAt || 0));
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+  return rows;
 }
 
 export async function upsertUser(user) {

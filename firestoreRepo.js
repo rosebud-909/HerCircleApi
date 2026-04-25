@@ -42,6 +42,11 @@ export async function fsUpsertUser(user) {
   return user;
 }
 
+export async function fsListUsers() {
+  const qs = await db().collection(USERS).orderBy('createdAt', 'desc').limit(500).get();
+  return qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 export async function fsGetRequest(requestId) {
   const snap = await db().collection(REQUESTS).doc(String(requestId)).get();
   if (!snap.exists) return null;

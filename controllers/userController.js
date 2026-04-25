@@ -1,4 +1,4 @@
-import { getUserById, listMyRequests, upsertUser } from '../store.js';
+import { getUserById, listMyRequests, listUsers, upsertUser } from '../store.js';
 import { ok, err } from '../utils/http.js';
 import { userMe, userPublic } from '../utils/presenters.js';
 
@@ -106,6 +106,15 @@ export async function getUserByIdPublic(req, res) {
     const u = await getUserById(req.params.id);
     if (!u) return err(res, 'User not found', 404, 'not_found');
     return ok(res, userPublic(u));
+  } catch (_e) {
+    return err(res, 'Internal error', 500, 'internal');
+  }
+}
+
+export async function listUsersPublic(_req, res) {
+  try {
+    const rows = await listUsers();
+    return ok(res, rows.map((u) => userPublic(u)));
   } catch (_e) {
     return err(res, 'Internal error', 500, 'internal');
   }
