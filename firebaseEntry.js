@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { onRequest } from 'firebase-functions/v2/https';
 import { createApp } from './app.js';
 
