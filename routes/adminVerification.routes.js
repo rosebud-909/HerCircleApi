@@ -7,6 +7,12 @@ const router = Router();
 
 router.get('/pending', requireAuth, requireAdmin, adminVerificationController.listPending);
 router.get('/decisions', requireAuth, requireAdmin, adminVerificationController.listDecisions);
+router.get(
+  '/:userId/file/:kind',
+  requireAuth,
+  requireAdmin,
+  adminVerificationController.streamVerificationFile,
+);
 router.get('/:userId', requireAuth, requireAdmin, adminVerificationController.getOne);
 router.patch('/:userId', requireAuth, requireAdmin, adminVerificationController.decide);
 

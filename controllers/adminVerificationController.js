@@ -8,15 +8,7 @@ function db() {
   return getFirebaseAdminFirestore();
 }
 
-async function signedUrlForPath(path) {
-  const bucket = getFirebaseAdminStorageBucket();
-  const f = bucket.file(String(path));
-  const [url] = await f.getSignedUrl({
-    action: 'read',
-    expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-  });
-  return url;
-}
+const VERIFICATION_FILE_KINDS = new Set(['governmentIdFront', 'governmentIdBack', 'selfieImage']);
 
 export async function listPending(req, res) {
   try {
@@ -98,12 +90,7 @@ export async function getOne(req, res) {
       return err(res, 'Verification files are missing', 500, 'internal');
     }
 
-    const [frontUrl, backUrl, selfieUrl] = await Promise.all([
-      signedUrlForPath(frontPath),
-      signedUrlForPath(backPath),
-      signedUrlForPath(selfiePath),
-    ]);
-
+    // Images are loaded via GET /admin/verification/:userId/file/:kind (streams from GCS; no signBlob).
     return ok(res, {
       user: {
         id: String(u.id),
@@ -119,9 +106,9 @@ export async function getOne(req, res) {
         phoneNumber: v.phoneNumber ?? null,
         address: v.address ?? null,
         files: {
-          governmentIdFront: { url: frontUrl, meta: v.files.governmentIdFront ?? null },
-          governmentIdBack: { url: backUrl, meta: v.files.governmentIdBack ?? null },
-          selfieImage: { url: selfieUrl, meta: v.files.selfieImage ?? null },
+          governmentIdFront: { meta: v.files.governmentIdFront ?? null },
+          governmentIdBack: { meta: v.files.governmentIdBack ?? null },
+          selfieImage: { meta: v.files.selfieImage ?? null },
         },
         review: v.review ?? null,
         reviewHistory: Array.isArray(v.reviewHistory) ? v.reviewHistory : null,
@@ -130,6 +117,53 @@ export async function getOne(req, res) {
   } catch (e) {
     console.error('admin getOne verification: failed', e);
     return err(res, 'Internal error', 500, 'internal');
+  }
+}
+
+/** Stream a verification image (admin only). Avoids GCS V4 signed URLs / iam.serviceAccounts.signBlob on Cloud Run. */
+export async function streamVerificationFile(req, res) {
+  try {
+    const userId = String(req.params.userId || '');
+    const kind = String(req.params.kind || '');
+    if (!userId || !VERIFICATION_FILE_KINDS.has(kind)) {
+      return err(res, 'Invalid file request', 400, 'validation_error');
+    }
+
+    const snap = await db().collection(USERS).doc(userId).get();
+    if (!snap.exists) return err(res, 'User not found', 404, 'not_found');
+    const u = { id: snap.id, ...snap.data() };
+    const fileMeta = u._verification?.files?.[kind];
+    const objectPath = fileMeta?.path;
+    if (!objectPath || typeof objectPath !== 'string') {
+      return err(res, 'Verification file not found', 404, 'not_found');
+    }
+
+    const bucket = getFirebaseAdminStorageBucket();
+    const gcsFile = bucket.file(objectPath);
+    const [exists] = await gcsFile.exists();
+    if (!exists) return err(res, 'File not found', 404, 'not_found');
+
+    const contentType =
+      typeof fileMeta.contentType === 'string' && fileMeta.contentType.trim()
+        ? fileMeta.contentType.trim()
+        : 'application/octet-stream';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+
+    const stream = gcsFile.createReadStream();
+    stream.on('error', (e) => {
+      console.error('admin verification file stream error', e);
+      if (!res.headersSent) {
+        err(res, 'Failed to read file', 500, 'internal');
+      } else {
+        res.destroy(e);
+      }
+    });
+    stream.pipe(res);
+  } catch (e) {
+    console.error('admin streamVerificationFile', e);
+    if (!res.headersSent) return err(res, 'Internal error', 500, 'internal');
   }
 }
 

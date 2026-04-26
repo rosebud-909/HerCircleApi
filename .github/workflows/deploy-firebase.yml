@@ -45,6 +45,7 @@ jobs:
       - name: Write function runtime environment for deploy
         env:
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS }}
         run: |
           if [ -z "$STORAGE_BUCKET" ]; then
             echo "Missing repository variable STORAGE_BUCKET."
@@ -53,6 +54,9 @@ jobs:
             exit 1
           fi
           printf 'STORAGE_BUCKET=%s\n' "$STORAGE_BUCKET" > .env
+          if [ -n "$ADMIN_EMAILS" ]; then
+            printf 'ADMIN_EMAILS=%s\n' "$ADMIN_EMAILS" >> .env
+          fi
 
       - name: Deploy functions
         env:
