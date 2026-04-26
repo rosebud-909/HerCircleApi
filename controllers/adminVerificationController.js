@@ -1,5 +1,6 @@
 import { getFirebaseAdminFirestore, getFirebaseAdminStorageBucket } from '../firebaseAdmin.js';
 import { ok, err } from '../utils/http.js';
+import { FieldValue } from 'firebase-admin/firestore';
 
 const USERS = 'users';
 
@@ -30,6 +31,40 @@ export async function listPending(req, res) {
       estimatedCompletion: u._verification?.estimatedCompletion ?? null,
       verificationStatus: u.verificationStatus ?? 'unverified',
     }));
+    return ok(res, { users: out });
+  } catch (_e) {
+    return err(res, 'Internal error', 500, 'internal');
+  }
+}
+
+export async function listDecisions(req, res) {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const status = req.query.status;
+    if (status && status !== 'verified' && status !== 'rejected') {
+      return err(res, 'status must be verified or rejected', 400, 'validation_error');
+    }
+
+    let q = db().collection(USERS).where('verificationStatus', 'in', ['verified', 'rejected']);
+    if (status) q = db().collection(USERS).where('verificationStatus', '==', status);
+
+    // Firestore ordering for nested fields can require indexes; fall back gracefully if needed.
+    const qs = await q.limit(limit).get();
+    const rows = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    const out = rows
+      .map((u) => ({
+        id: String(u.id),
+        name: u.name ?? null,
+        email: u.email ?? null,
+        submittedAt: u._verification?.submittedAt ?? null,
+        decidedAt: u._verification?.review?.decidedAt ?? null,
+        decision: u._verification?.review?.status ?? (u.verificationStatus ?? null),
+        reason: u._verification?.review?.reason ?? null,
+        verificationStatus: u.verificationStatus ?? 'unverified',
+      }))
+      .sort((a, b) => String(b.decidedAt || b.submittedAt || '').localeCompare(String(a.decidedAt || a.submittedAt || '')));
+
     return ok(res, { users: out });
   } catch (_e) {
     return err(res, 'Internal error', 500, 'internal');
@@ -89,6 +124,7 @@ export async function getOne(req, res) {
           selfieImage: { url: selfieUrl, meta: v.files.selfieImage ?? null },
         },
         review: v.review ?? null,
+        reviewHistory: Array.isArray(v.reviewHistory) ? v.reviewHistory : null,
       },
     });
   } catch (_e) {
@@ -109,6 +145,29 @@ export async function decide(req, res) {
     if (!snap.exists) return err(res, 'User not found', 404, 'not_found');
     const u = { id: snap.id, ...snap.data() };
     const now = new Date().toISOString();
+    const prevReview = u._verification?.review ?? null;
+    const prevStatus = prevReview?.status ?? (u.verificationStatus ?? null);
+    const trimmedReason = typeof reason === 'string' && reason.trim() ? reason.trim() : null;
+    const prevReason = typeof prevReview?.reason === 'string' && prevReview.reason.trim() ? prevReview.reason.trim() : null;
+
+    // If we're re-rejecting, allow "add more reason" without losing earlier context.
+    const mergedReason =
+      status === 'rejected' && prevStatus === 'rejected' && trimmedReason
+        ? prevReason
+          ? prevReason.includes(trimmedReason)
+            ? prevReason
+            : `${prevReason}\n\n${trimmedReason}`
+          : trimmedReason
+        : trimmedReason;
+
+    const historyEntry = {
+      decidedAt: now,
+      decidedBy: req.userId ?? null,
+      fromStatus: prevStatus,
+      toStatus: status,
+      ...(prevReason ? { prevReason } : {}),
+      ...(mergedReason ? { reason: mergedReason } : {}),
+    };
     const patch = {
       verificationStatus: status,
       ...(status === 'verified' ? { verifiedAt: now } : { verifiedAt: null }),
@@ -118,8 +177,9 @@ export async function decide(req, res) {
           decidedAt: now,
           decidedBy: req.userId ?? null,
           status,
-          ...(typeof reason === 'string' && reason.trim() ? { reason: reason.trim() } : {}),
+          ...(mergedReason ? { reason: mergedReason } : {}),
         },
+        reviewHistory: FieldValue.arrayUnion(historyEntry),
       },
     };
     await db().collection(USERS).doc(userId).set(patch, { merge: true });
