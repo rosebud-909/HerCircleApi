@@ -134,9 +134,12 @@ export async function submitVerification(req, res) {
       return err(res, 'File uploads missing data', 400, 'validation_error');
     }
 
-    // Best-effort cleanup so users don't accumulate old verification docs in Storage.
-    // (ignore not found / permission errors to avoid blocking submissions)
-    await cleanupPreviousVerificationFiles(u);
+    // Best-effort cleanup — must never block a new submission (delete/IAM can fail in prod).
+    try {
+      await cleanupPreviousVerificationFiles(u);
+    } catch (e) {
+      console.warn('verification submit: skipped cleanup of previous verification files', e);
+    }
 
     // Upload images to Firebase Storage (manual verification workflow).
     let frontObj;
@@ -194,7 +197,9 @@ export async function submitVerification(req, res) {
       201,
     );
   } catch (e) {
-    console.error('verification submit: internal error', e);
+    const code = typeof e === 'object' && e !== null && 'code' in e ? e.code : undefined;
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('verification submit: internal error', { code, msg, err: e });
     return err(res, 'Internal error', 500, 'internal');
   }
 }
