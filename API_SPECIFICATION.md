@@ -5,8 +5,6 @@
 
 **Base URL:** `/api/v1`
 
-**Contract source:** This file is synced from the app repo at `HerCircle/src/docs/API_SPECIFICATION.md`. Edit there first, then copy into `HerCircleApi` so both stay identical.
-
 All endpoints require `Authorization: Bearer <firebase_id_token>` unless noted otherwise.
 
 **Authentication:** Firebase Auth ID tokens. The backend should verify tokens using the Firebase Admin SDK.
@@ -99,6 +97,7 @@ Register or retrieve a user profile after Google OAuth sign-in. Creates a profil
     "name": "Sarah Johnson",
     "email": "sarah.johnson@gmail.com",
     "location": "",
+    "avatarUrl": "https://lh3.googleusercontent.com/...",
     "verificationStatus": "unverified",
     "isNewUser": true,
     "createdAt": "2026-04-21T12:00:00.000Z"
@@ -106,9 +105,25 @@ Register or retrieve a user profile after Google OAuth sign-in. Creates a profil
 }
 ```
 
+When `photoUrl` was sent on input, persist it as **`avatarUrl`** on the user row when creating or updating the profile so `GET /users/me` stays consistent.
+
 ---
 
 ## 👤 Users & Profile
+
+### Profile photo (`avatarUrl`)
+
+**There is no HerCircle multipart endpoint for raw image bytes** for profile avatars. The web client uploads the file to **Firebase Storage** (path pattern `profile-photos/{firebaseUid}/avatar`), then sets **Firebase Auth** `photoURL` to the resulting download URL so the account carries a stable image URL.
+
+**Backend (recommended):** Persist that URL (or your own CDN URL after a future server-side copy) on the user record and expose it as **`avatarUrl`** on `GET /users/me` and related user-shaped objects. Accept **`avatarUrl`** on `PATCH /users/me` so the API can remain the source of truth across devices and for UIs that do not read Firebase Auth directly.
+
+**Field naming:** Responses **should** use `avatarUrl`. The client also accepts **`photoUrl`** as an alias on read-only user JSON for backward compatibility (e.g. mirroring Google’s naming).
+
+**Validation (when implementing `PATCH`):** HTTPS URL only, reasonable max length (e.g. 2048), optional host allowlist (Firebase Storage / your CDN) to reduce open-redirect or abuse.
+
+**Caching:** overwriting the same Storage object may not instantly refresh in all clients due to caching. Prefer cache-busting when rendering (e.g. append `?v=<profileUpdatedAt>`), or update `avatarUrl` in the API whenever the user uploads a new avatar (e.g. with a version query param).
+
+---
 
 ### `GET /users/me`
 
@@ -123,6 +138,7 @@ Get the current user's full profile.
     "email": "sarah@example.com",
     "location": "West Loop, Chicago",
     "bio": "Happy to help neighbors when I can.",
+    "avatarUrl": "https://firebasestorage.googleapis.com/.../avatar.jpg",
     "verificationStatus": "verified",
     "verifiedAt": "2026-04-15T10:00:00.000Z",
     "createdAt": "2026-04-08T12:00:00.000Z",
@@ -130,6 +146,10 @@ Get the current user's full profile.
   }
 }
 ```
+
+| Field | Notes |
+|-------|--------|
+| `avatarUrl` | Optional. Public HTTPS URL for profile image. Omitted when unset. |
 
 `connectedUserIds` (optional): user ids the current user has **community-connected** with (for “Connected” badges on Community). Can be omitted if the client derives connections from `GET /chats` instead.
 
@@ -143,14 +163,17 @@ Update profile fields.
 ```json
 {
   "bio": "Mom of two, always happy to help.",
-  "location": "Lincoln Park, Chicago"
+  "location": "Lincoln Park, Chicago",
+  "avatarUrl": "https://firebasestorage.googleapis.com/.../avatar.jpg"
 }
 ```
 
-| Field | Type | Required |
-|-------|------|----------|
-| `bio` | string | ❌ |
-| `location` | string | ❌ |
+| Field | Type | Required | Notes |
+|-------|------|----------|--------|
+| `bio` | string | ❌ | |
+| `location` | string | ❌ | |
+| `alias` | string \| null | ❌ | |
+| `avatarUrl` | string \| null | ❌ | Set to `null` to clear stored URL (client may still show Firebase Auth photo until next sync). |
 
 **Response (200):**
 ```json
@@ -161,6 +184,7 @@ Update profile fields.
     "email": "sarah@example.com",
     "location": "Lincoln Park, Chicago",
     "bio": "Mom of two, always happy to help.",
+    "avatarUrl": "https://firebasestorage.googleapis.com/.../avatar.jpg",
     "verificationStatus": "verified",
     "verifiedAt": "2026-04-15T10:00:00.000Z",
     "createdAt": "2026-04-08T12:00:00.000Z"
@@ -181,11 +205,14 @@ Get a public user profile (limited fields).
     "id": "u2",
     "name": "Elena",
     "location": "West Loop, Chicago",
+    "avatarUrl": "https://firebasestorage.googleapis.com/.../avatar.jpg",
     "verificationStatus": "pending",
     "createdAt": "2026-04-13T12:00:00.000Z"
   }
 }
 ```
+
+`avatarUrl` is optional; omit for users without a stored photo.
 
 ---
 
@@ -275,7 +302,8 @@ List open help requests (feed). Supports filtering and pagination.
         "user": {
           "id": "u2",
           "name": "Elena",
-          "verificationStatus": "verified"
+          "verificationStatus": "verified",
+          "avatarUrl": "https://firebasestorage.googleapis.com/.../avatar.jpg"
         }
       }
     ],
@@ -287,6 +315,8 @@ List open help requests (feed). Supports filtering and pagination.
   }
 }
 ```
+
+Embedded `user` objects may include optional **`avatarUrl`** (omit when unknown, anonymous requests, or privacy policy excludes it).
 
 ---
 
@@ -311,7 +341,8 @@ Get a single request with full details.
     "user": {
       "id": "u2",
       "name": "Elena",
-      "verificationStatus": "verified"
+      "verificationStatus": "verified",
+      "avatarUrl": "https://firebasestorage.googleapis.com/.../avatar.jpg"
     }
   }
 }
@@ -771,7 +802,7 @@ Get active SOS alerts near the current user (for community awareness).
 | `POST` | `/auth/register` | Register user profile after Firebase signup |
 | `POST` | `/auth/google` | Register/retrieve profile after Google OAuth |
 | `GET` | `/users/me` | Current user profile |
-| `PATCH` | `/users/me` | Update profile |
+| `PATCH` | `/users/me` | Update profile (`bio`, `location`, `alias`, `avatarUrl`; see **Profile photo**) |
 | `GET` | `/users/:id` | Public user profile |
 | `POST` | `/verification/submit` | Submit ID verification |
 | `GET` | `/verification/status` | Check verification status |
@@ -804,6 +835,7 @@ Get active SOS alerts near the current user (for community awareness).
 - **`GET /community/members`:** Rate-limit and avoid returning full user tables; location matching should use normalized regions you control, not raw address strings from clients.
 
 ### Data Protection
+- **`PATCH /users/me` `avatarUrl`:** Validate HTTPS-only, length limits, and ideally allowed storage hosts (e.g. your Firebase Storage bucket or CDN) before persisting
 - **SSN** must be encrypted at rest (AES-256); only store last 4 digits after verification
 - **Government ID images** stored in encrypted cloud storage with time-limited access URLs
 - **SOS alerts** should trigger real-time notifications via Firebase Cloud Messaging (FCM) or WebSocket

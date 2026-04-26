@@ -1,0 +1,35 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Profile photos uploaded by the web client.
+    // Canonical path (no extension): profile-photos/{firebaseUid}/avatar
+    // Using a single object name ensures new uploads overwrite, not accumulate.
+    match /profile-photos/{uid}/{filename} {
+      // Reads are allowed so profile images can be displayed without requiring auth.
+      // If you want private profile photos, change this to: if isOwner(uid)
+      allow read: if true;
+
+      // Only the authenticated owner may create/update/delete their own files.
+      allow create, update: if isOwner(uid)
+        // Restrict to a single "avatar" object name so new uploads overwrite.
+        && filename == 'avatar'
+        && request.resource.size < 5 * 1024 * 1024
+        // Allow common phone image formats. (iPhone often uploads HEIC/HEIF.)
+        && request.resource.contentType.matches('image/(jpeg|png|heic|heif|webp)');
+      allow delete: if isOwner(uid);
+    }
+
+    // Default deny.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
