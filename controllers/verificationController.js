@@ -1,5 +1,57 @@
 import { getUserById, upsertUser } from '../store.js';
 import { ok, err } from '../utils/http.js';
+import { getFirebaseAdminStorageBucket } from '../firebaseAdmin.js';
+
+function sanitizeImageContentType(ct) {
+  const t = String(ct || '').toLowerCase();
+  if (t === 'image/jpeg' || t === 'image/jpg') return 'image/jpeg';
+  if (t === 'image/png') return 'image/png';
+  if (t === 'image/webp') return 'image/webp';
+  if (t === 'image/heic' || t === 'image/heif') return t;
+  return null;
+}
+
+function extForContentType(ct) {
+  switch (ct) {
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    case 'image/heic':
+      return 'heic';
+    case 'image/heif':
+      return 'heif';
+    case 'image/jpeg':
+    default:
+      return 'jpg';
+  }
+}
+
+async function uploadVerificationImage({ userId, kind, file, submittedAt }) {
+  const bucket = getFirebaseAdminStorageBucket();
+  const contentType = sanitizeImageContentType(file?.mimetype);
+  if (!contentType) {
+    throw new Error(`Unsupported contentType for ${kind}`);
+  }
+  const ext = extForContentType(contentType);
+  const ts = Date.parse(String(submittedAt));
+  const safeTs = Number.isFinite(ts) ? ts : Date.now();
+  const objectPath = `verification/${String(userId)}/${safeTs}/${kind}.${ext}`;
+  const gcsFile = bucket.file(objectPath);
+  await gcsFile.save(file.buffer, {
+    resumable: false,
+    metadata: {
+      contentType,
+      cacheControl: 'private, max-age=0, no-transform',
+      metadata: {
+        userId: String(userId),
+        kind: String(kind),
+        submittedAt: String(submittedAt),
+      },
+    },
+  });
+  return { bucket: bucket.name, path: objectPath, contentType, size: file.size };
+}
 
 export async function submitVerification(req, res) {
   try {
@@ -41,11 +93,43 @@ export async function submitVerification(req, res) {
     const u = await getUserById(req.userId);
     if (!u) return err(res, 'User not found', 404, 'not_found');
     const submittedAt = new Date().toISOString();
+
+    if (!front?.buffer || !back?.buffer || !selfie?.buffer) {
+      return err(res, 'File uploads missing data', 400, 'validation_error');
+    }
+
+    // Upload images to Firebase Storage (manual verification workflow).
+    let frontObj;
+    let backObj;
+    let selfieObj;
+    try {
+      [frontObj, backObj, selfieObj] = await Promise.all([
+        uploadVerificationImage({ userId: req.userId, kind: 'governmentIdFront', file: front, submittedAt }),
+        uploadVerificationImage({ userId: req.userId, kind: 'governmentIdBack', file: back, submittedAt }),
+        uploadVerificationImage({ userId: req.userId, kind: 'selfieImage', file: selfie, submittedAt }),
+      ]);
+    } catch (_e) {
+      return err(res, 'Could not store verification documents', 500, 'storage_error');
+    }
+
     u.verificationStatus = 'pending';
     u._verification = {
       submittedAt,
       estimatedCompletion: new Date(Date.now() + 2 * 86400000).toISOString(),
-      fileSizes: { front: front.size, back: back.size, selfie: selfie.size },
+      files: {
+        governmentIdFront: frontObj,
+        governmentIdBack: backObj,
+        selfieImage: selfieObj,
+      },
+      ssnLast4: String(ssn).trim().slice(-4),
+      dateOfBirth: String(dateOfBirth).trim(),
+      phoneNumber: String(phoneNumber).trim(),
+      address: {
+        street: String(addressStreet).trim(),
+        city: String(addressCity).trim(),
+        state: String(addressState).trim(),
+        zip: String(addressZip).trim(),
+      },
     };
     await upsertUser(u);
     return ok(
