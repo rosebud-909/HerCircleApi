@@ -185,6 +185,18 @@
           }
         },
         {
+          "name": "DELETE /api/v1/users/me",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/me"
+          }
+        },
+        {
           "name": "POST /api/v1/auth/logout",
           "request": {
             "auth": {
