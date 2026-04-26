@@ -14,12 +14,13 @@ export async function deleteUserOwnedStorageObjects(userId) {
       await Promise.all(files.map((f) => f.delete({ ignoreNotFound: true }).catch(() => null)));
     }
   } catch (e) {
-    const code = e && typeof e === 'object' && 'code' in e ? String((/** @type {{ code?: string }} */ (e)).code) : '';
+    const info = e && typeof e === 'object' && e !== null ? e : {};
+    const top = 'code' in info && typeof info.code === 'string' ? info.code : '';
     const nested =
-      e && typeof e === 'object' && e !== null && 'errorInfo' in e && typeof (/** @type {{ errorInfo?: { code?: string } }} */ (e)).errorInfo === 'object'
-        ? String((/** @type {{ errorInfo?: { code?: string } }} */ (e)).errorInfo?.code ?? '')
+      'errorInfo' in info && info.errorInfo && typeof info.errorInfo === 'object' && 'code' in info.errorInfo
+        ? String(info.errorInfo.code)
         : '';
-    if (code === 'storage/invalid-argument' || nested === 'storage/invalid-argument') return;
+    if (top === 'storage/invalid-argument' || nested === 'storage/invalid-argument') return;
     console.error('[deleteAccount] storage cleanup failed', e);
   }
 }
