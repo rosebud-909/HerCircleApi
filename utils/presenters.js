@@ -6,6 +6,7 @@ export function userPublic(u) {
     name: u.name,
     alias: u.alias ?? null,
     location: u.location ?? null,
+    bio: u.bio ?? null,
     verificationStatus: u.verificationStatus,
     createdAt: u.createdAt,
   };

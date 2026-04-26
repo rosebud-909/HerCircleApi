@@ -44,6 +44,63 @@ export async function fsListUsers() {
   return qs.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+export async function fsUpdateUserBio(userId, bio) {
+  const ref = db().collection(USERS).doc(String(userId));
+  await ref.set({ bio: bio ?? null }, { merge: true });
+}
+
+export async function fsBatchUpdateUserBios(entries, { overwrite = false } = {}) {
+  const rows = Array.isArray(entries) ? entries : [];
+  if (rows.length === 0) return { total: 0, updated: 0, skipped: 0 };
+
+  let updated = 0;
+  let skipped = 0;
+
+  // Firestore batches are limited to 500 writes; keep a safety buffer.
+  const CHUNK_SIZE = 400;
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE);
+    const batch = db().batch();
+
+    if (overwrite) {
+      for (const r of chunk) {
+        if (!r?.id) {
+          skipped += 1;
+          continue;
+        }
+        batch.set(db().collection(USERS).doc(String(r.id)), { bio: r?.bio ?? null }, { merge: true });
+        updated += 1;
+      }
+      await batch.commit();
+      continue;
+    }
+
+    const refs = chunk
+      .map((r) => (r?.id ? db().collection(USERS).doc(String(r.id)) : null))
+      .filter(Boolean);
+    const snaps = await db().getAll(...refs);
+    const byId = new Map(snaps.map((s) => [s.id, s]));
+
+    for (const r of chunk) {
+      if (!r?.id) {
+        skipped += 1;
+        continue;
+      }
+      const snap = byId.get(String(r.id));
+      const existingBio = snap?.exists ? snap.data()?.bio : undefined;
+      if (existingBio != null && String(existingBio).trim() !== '') {
+        skipped += 1;
+        continue;
+      }
+      batch.set(db().collection(USERS).doc(String(r.id)), { bio: r?.bio ?? null }, { merge: true });
+      updated += 1;
+    }
+    await batch.commit();
+  }
+
+  return { total: rows.length, updated, skipped };
+}
+
 export async function fsGetRequest(requestId) {
   const snap = await db().collection(REQUESTS).doc(String(requestId)).get();
   if (!snap.exists) return null;
