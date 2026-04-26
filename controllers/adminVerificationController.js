@@ -127,7 +127,8 @@ export async function getOne(req, res) {
         reviewHistory: Array.isArray(v.reviewHistory) ? v.reviewHistory : null,
       },
     });
-  } catch (_e) {
+  } catch (e) {
+    console.error('admin getOne verification: failed', e);
     return err(res, 'Internal error', 500, 'internal');
   }
 }

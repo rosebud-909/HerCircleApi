@@ -49,12 +49,14 @@ export const sosCreateLimiter = rateLimit({
   keyGenerator: keyUserOrIp,
 });
 
-/** POST /verification/submit — 3 per day per user */
+/** POST /verification/submit — 3 per day per user (counts successful submits only) */
 export const verificationSubmitLimiter = rateLimit({
   ...common,
   windowMs: 24 * 60 * 60 * 1000,
   max: 3,
   keyGenerator: keyUserOrIp,
+  // Do not burn quota on server errors / validation failures while users (or ops) are debugging.
+  skipFailedRequests: true,
 });
 
 /** POST /chats — 20 per minute per user */
