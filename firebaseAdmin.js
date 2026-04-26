@@ -12,7 +12,11 @@ function initFirebaseAdmin() {
   if (getApps().length > 0) return;
 
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
+  // Firebase-deployed Functions: env keys prefixed with FIREBASE_ are reserved; use STORAGE_BUCKET (or GCLOUD_STORAGE_BUCKET) in prod.
+  const storageBucket =
+    process.env.STORAGE_BUCKET ||
+    process.env.GCLOUD_STORAGE_BUCKET ||
+    process.env.FIREBASE_STORAGE_BUCKET;
   if (serviceAccountJson) {
     const parsed = JSON.parse(serviceAccountJson);
     initializeApp({
