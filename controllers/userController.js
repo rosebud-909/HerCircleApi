@@ -1,5 +1,7 @@
 import { actorIsAdmin } from '../middleware/admin.js';
-import { getUserById, listChatsForUser, listMyRequests, listUsers, upsertUser } from '../store.js';
+import { getFirebaseAdminAuth } from '../firebaseAdmin.js';
+import { deleteUserOwnedStorageObjects } from '../services/deleteUserStorage.js';
+import { getUserById, listChatsForUser, listMyRequests, listUsers, purgeUserAccountData, upsertUser } from '../store.js';
 import { communityConnectedUserIdsFromChats } from '../services/userConnections.js';
 import { ok, err } from '../utils/http.js';
 import { userMe, userPublic } from '../utils/presenters.js';
@@ -134,5 +136,31 @@ export async function listUsersPublic(_req, res) {
     return ok(res, rows.map((u) => userPublic(u)));
   } catch (_e) {
     return err(res, 'Internal error', 500, 'internal');
+  }
+}
+
+export async function deleteMe(req, res) {
+  const uid = req.userId;
+  try {
+    await deleteUserOwnedStorageObjects(uid);
+    await purgeUserAccountData(uid);
+    // Automated tests use in-memory store + header auth; Firebase Admin is not configured there.
+    if (process.env.ALLOW_TEST_AUTH === 'true') {
+      return ok(res, { deleted: true, auth: 'skipped_in_test_env' });
+    }
+    try {
+      await getFirebaseAdminAuth().deleteUser(uid);
+    } catch (e) {
+      const code = e && typeof e.code === 'string' ? e.code : '';
+      if (code === 'auth/user-not-found') {
+        return ok(res, { deleted: true, auth: 'already_deleted' });
+      }
+      throw e;
+    }
+    return ok(res, { deleted: true });
+  } catch (e) {
+    console.error('deleteMe', e);
+    const msg = e instanceof Error ? e.message : 'Could not delete account';
+    return err(res, msg, 500, 'internal');
   }
 }

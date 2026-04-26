@@ -18,6 +18,7 @@ import {
   fsListMessages,
   fsListRequestsFeed,
   fsListRequestsForUser,
+  fsPurgeUserData,
   fsUpdateChatUpdatedAt,
   fsUpdateRequestStatus,
   fsUpdateSos,
@@ -47,6 +48,23 @@ export async function upsertUser(user) {
   if (useFirestore()) return fsUpsertUser(user);
   memoryStore.users.set(user.id, user);
   return user;
+}
+
+/** Firestore or in-memory: remove all app data for this uid (not Auth or GCS). */
+export async function purgeUserAccountData(userId) {
+  if (useFirestore()) return fsPurgeUserData(userId);
+  const uid = String(userId);
+  memoryStore.users.delete(uid);
+  memoryStore.requests = memoryStore.requests.filter((r) => r.userId !== uid);
+  memoryStore.sos = memoryStore.sos.filter((s) => s.userId !== uid);
+  const removeChatIds = [];
+  for (const [id, chat] of memoryStore.chats) {
+    if (Array.isArray(chat.participants) && chat.participants.includes(uid)) removeChatIds.push(id);
+  }
+  for (const id of removeChatIds) {
+    memoryStore.chats.delete(id);
+    memoryStore.messages.delete(id);
+  }
 }
 
 export async function getRequestById(requestId) {

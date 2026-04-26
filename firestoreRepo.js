@@ -6,6 +6,8 @@ const REQUESTS = 'requests';
 const CHATS = 'chats';
 const MESSAGES = 'messages';
 const SOS = 'sos';
+/** Lazy-filled US ZIP → display location (`City, ST`); populated from successful Zippopotam lookups. */
+const POSTAL_LOCATIONS = 'postalLocations';
 
 function db() {
   return getFirebaseAdminFirestore();
@@ -233,6 +235,86 @@ export async function fsListActiveSos() {
     .limit(200)
     .get();
   return qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export function fsPostalLocationDocId(countryCode, postalNormalized) {
+  return `${String(countryCode).toUpperCase()}_${String(postalNormalized)}`;
+}
+
+export async function fsGetPostalLocation(countryCode, postalNormalized) {
+  const id = fsPostalLocationDocId(countryCode, postalNormalized);
+  const snap = await db().collection(POSTAL_LOCATIONS).doc(id).get();
+  if (!snap.exists) return null;
+  const d = snap.data();
+  if (typeof d?.location !== 'string' || !d.location.trim()) return null;
+  return {
+    location: d.location.trim(),
+    source: typeof d.source === 'string' && d.source.trim() ? d.source.trim() : 'persisted',
+  };
+}
+
+export async function fsUpsertPostalLocation(countryCode, postalNormalized, { location, source }) {
+  const id = fsPostalLocationDocId(countryCode, postalNormalized);
+  await db()
+    .collection(POSTAL_LOCATIONS)
+    .doc(id)
+    .set(
+      {
+        countryCode: String(countryCode).toUpperCase(),
+        postal: String(postalNormalized),
+        location: String(location).trim(),
+        source: String(source),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+}
+
+async function fsDeleteAllMessagesInChat(chatId) {
+  const col = db().collection(CHATS).doc(String(chatId)).collection(MESSAGES);
+  for (;;) {
+    const snap = await col.limit(450).get();
+    if (snap.empty) break;
+    const batch = db().batch();
+    for (const d of snap.docs) batch.delete(d.ref);
+    await batch.commit();
+    if (snap.size < 450) break;
+  }
+}
+
+/**
+ * Removes all Firestore data keyed to this Firebase Auth uid (user doc, owned requests/SOS,
+ * chats they participate in including subcollection messages). Does not touch Auth or Storage.
+ */
+export async function fsPurgeUserData(userId) {
+  const uid = String(userId);
+
+  for (;;) {
+    const qs = await db().collection(REQUESTS).where('userId', '==', uid).limit(450).get();
+    if (qs.empty) break;
+    const batch = db().batch();
+    for (const d of qs.docs) batch.delete(d.ref);
+    await batch.commit();
+  }
+
+  for (;;) {
+    const qs = await db().collection(SOS).where('userId', '==', uid).limit(450).get();
+    if (qs.empty) break;
+    const batch = db().batch();
+    for (const d of qs.docs) batch.delete(d.ref);
+    await batch.commit();
+  }
+
+  for (;;) {
+    const qs = await db().collection(CHATS).where('participants', 'array-contains', uid).limit(40).get();
+    if (qs.empty) break;
+    for (const d of qs.docs) {
+      await fsDeleteAllMessagesInChat(d.id);
+      await d.ref.delete();
+    }
+  }
+
+  await db().collection(USERS).doc(uid).delete();
 }
 
 // List queries use orderBy with composite indexes from `firestore.indexes.json`.

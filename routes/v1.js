@@ -7,9 +7,11 @@ import requestsRoutes from './requests.routes.js';
 import chatsRoutes from './chats.routes.js';
 import communityRoutes from './community.routes.js';
 import sosRoutes from './sos.routes.js';
+import locationRoutes from './location.routes.js';
 
 const v1 = Router();
 
+v1.use('/location', locationRoutes);
 v1.use('/auth', authRoutes);
 v1.use('/users', usersRoutes);
 v1.use('/verification', verificationRoutes);

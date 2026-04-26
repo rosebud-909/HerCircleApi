@@ -82,3 +82,11 @@ export const communityMembersLimiter = rateLimit({
   max: 30,
   keyGenerator: keyUserOrIp,
 });
+
+/** GET /location/postal — public; 60 per minute per IP (Zippopotam + server cache) */
+export const postalLocationLimiter = rateLimit({
+  ...common,
+  windowMs: 60 * 1000,
+  max: 60,
+  keyGenerator: (req) => ipKeyGenerator(req.ip || ''),
+});

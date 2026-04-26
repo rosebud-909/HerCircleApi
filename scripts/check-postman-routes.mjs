@@ -14,6 +14,7 @@ const ROUTER_METHOD_RE =
 const APP_GET_RE = /app\.get\(\s*['"]([^'"]+)['"]/g;
 
 const V1_MOUNTS = [
+  { mount: '/location', file: 'routes/location.routes.js' },
   { mount: '/auth', file: 'routes/auth.routes.js' },
   { mount: '/users', file: 'routes/users.routes.js' },
   { mount: '/verification', file: 'routes/verification.routes.js' },

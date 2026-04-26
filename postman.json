@@ -92,6 +92,20 @@
       ]
     },
     {
+      "name": "Location (public)",
+      "item": [
+        {
+          "name": "GET /api/v1/location/postal",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/location/postal?country=US&postal=95132"
+          }
+        }
+      ]
+    },
+    {
       "name": "Auth / Profile",
       "item": [
         {
