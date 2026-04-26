@@ -11,6 +11,17 @@ function sanitizeImageContentType(ct) {
   return null;
 }
 
+/** Some mobile browsers send empty or generic mimetype; infer from original filename. */
+function inferContentTypeFromOriginalName(originalname) {
+  const n = String(originalname || '').toLowerCase();
+  if (n.endsWith('.png')) return 'image/png';
+  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'image/jpeg';
+  if (n.endsWith('.webp')) return 'image/webp';
+  if (n.endsWith('.heic')) return 'image/heic';
+  if (n.endsWith('.heif')) return 'image/heif';
+  return null;
+}
+
 function extForContentType(ct) {
   switch (ct) {
     case 'image/png':
@@ -29,9 +40,12 @@ function extForContentType(ct) {
 
 async function uploadVerificationImage({ userId, kind, file, submittedAt }) {
   const bucket = getFirebaseAdminStorageBucket();
-  const contentType = sanitizeImageContentType(file?.mimetype);
+  let contentType = sanitizeImageContentType(file?.mimetype);
+  if (!contentType && file?.originalname) {
+    contentType = inferContentTypeFromOriginalName(file.originalname);
+  }
   if (!contentType) {
-    throw new Error(`Unsupported contentType for ${kind}`);
+    throw new Error(`Unsupported contentType for ${kind} (mimetype=${file?.mimetype}, name=${file?.originalname})`);
   }
   const ext = extForContentType(contentType);
   const ts = Date.parse(String(submittedAt));
@@ -136,7 +150,14 @@ export async function submitVerification(req, res) {
       ]);
     } catch (e) {
       console.error('verification submit: storage upload failed', e);
-      return err(res, 'Could not store verification documents', 500, 'storage_error');
+      const text = e instanceof Error ? e.message : String(e);
+      const perm =
+        /403|permission|access denied|forbidden|does not have storage/i.test(text) ||
+        (typeof e === 'object' && e !== null && Number(e.code) === 403);
+      const hint = perm
+        ? 'Storage permission denied. Grant the Cloud Run service account Storage Object Admin (or object create) on your bucket.'
+        : 'Could not store verification documents. Check STORAGE_BUCKET, bucket IAM, and image format.';
+      return err(res, hint, 500, 'storage_error');
     }
 
     u.verificationStatus = 'pending';
@@ -158,7 +179,12 @@ export async function submitVerification(req, res) {
         zip: String(addressZip).trim(),
       },
     };
-    await upsertUser(u);
+    try {
+      await upsertUser(u);
+    } catch (e) {
+      console.error('verification submit: firestore upsert failed', e);
+      return err(res, 'Could not save verification record', 500, 'firestore_error');
+    }
     return ok(
       res,
       {

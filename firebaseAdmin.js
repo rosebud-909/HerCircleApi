@@ -48,6 +48,10 @@ export function getFirebaseAdminFirestore() {
 
 export function getFirebaseAdminStorageBucket() {
   initFirebaseAdmin();
+  const name = [process.env.STORAGE_BUCKET, process.env.GCLOUD_STORAGE_BUCKET, process.env.FIREBASE_STORAGE_BUCKET]
+    .map((s) => (typeof s === 'string' ? s.trim() : ''))
+    .find(Boolean);
+  if (name) return getStorage().bucket(name);
   return getStorage().bucket();
 }
 
