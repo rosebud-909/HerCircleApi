@@ -134,7 +134,8 @@ export async function submitVerification(req, res) {
         uploadVerificationImage({ userId: req.userId, kind: 'governmentIdBack', file: back, submittedAt }),
         uploadVerificationImage({ userId: req.userId, kind: 'selfieImage', file: selfie, submittedAt }),
       ]);
-    } catch (_e) {
+    } catch (e) {
+      console.error('verification submit: storage upload failed', e);
       return err(res, 'Could not store verification documents', 500, 'storage_error');
     }
 
@@ -166,7 +167,8 @@ export async function submitVerification(req, res) {
       },
       201,
     );
-  } catch (_e) {
+  } catch (e) {
+    console.error('verification submit: internal error', e);
     return err(res, 'Internal error', 500, 'internal');
   }
 }

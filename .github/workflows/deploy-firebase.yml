@@ -40,7 +40,21 @@ jobs:
           fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
 
-      - name: Deploy (functions + hosting)
+      # Gen 2 functions run on Cloud Run. Firebase CLI reads this file at deploy time and sets
+      # runtime env vars on the service (your local .env is gitignored and not on the runner).
+      - name: Write function runtime environment for deploy
+        env:
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+        run: |
+          if [ -z "$STORAGE_BUCKET" ]; then
+            echo "Missing repository variable STORAGE_BUCKET."
+            echo "Add it under: Settings → Secrets and variables → Actions → Variables"
+            echo "Value: your default Storage bucket id (Firebase → Storage), e.g. project-id.appspot.com"
+            exit 1
+          fi
+          printf 'STORAGE_BUCKET=%s\n' "$STORAGE_BUCKET" > .env
+
+      - name: Deploy functions
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
         run: npx firebase-tools deploy --non-interactive --only functions

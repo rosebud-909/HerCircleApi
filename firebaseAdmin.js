@@ -23,14 +23,17 @@ function initFirebaseAdmin() {
       credential: cert(parsed),
       ...(storageBucket ? { storageBucket } : {}),
     });
-    return;
+  } else {
+    // Supports GOOGLE_APPLICATION_CREDENTIALS (recommended for local dev + servers)
+    // and Application Default Credentials on Cloud Run / Cloud Functions.
+    initializeApp({
+      credential: applicationDefault(),
+      ...(storageBucket ? { storageBucket } : {}),
+    });
   }
 
-  // Supports GOOGLE_APPLICATION_CREDENTIALS (recommended for local dev + servers)
-  initializeApp({
-    credential: applicationDefault(),
-    ...(storageBucket ? { storageBucket } : {}),
-  });
+  // Avoid Firestore rejecting merged user docs that contain `undefined` fields.
+  getFirestore().settings({ ignoreUndefinedProperties: true });
 }
 
 export function getFirebaseAdminAuth() {
