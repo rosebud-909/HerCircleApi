@@ -1,4 +1,5 @@
-export function requireAdmin(req, res, next) {
+/** Same rules as verification admin routes; exported for PATCH /users/me (community directory opt-in). */
+export function actorIsAdmin(req) {
   const uid = req.userId;
   const claims = req.firebase && typeof req.firebase === 'object' ? req.firebase : null;
 
@@ -18,7 +19,11 @@ export function requireAdmin(req, res, next) {
   const uidAllowed = uid && allowUids.includes(String(uid));
   const emailAllowed = email && allowEmails.includes(String(email));
 
-  if (hasClaim || uidAllowed || emailAllowed) return next();
+  return Boolean(hasClaim || uidAllowed || emailAllowed);
+}
+
+export function requireAdmin(req, res, next) {
+  if (actorIsAdmin(req)) return next();
   return res.status(403).json({ error: 'Forbidden', code: 'forbidden' });
 }
 

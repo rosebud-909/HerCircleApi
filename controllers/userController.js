@@ -1,3 +1,4 @@
+import { actorIsAdmin } from '../middleware/admin.js';
 import { getUserById, listChatsForUser, listMyRequests, listUsers, upsertUser } from '../store.js';
 import { communityConnectedUserIdsFromChats } from '../services/userConnections.js';
 import { ok, err } from '../utils/http.js';
@@ -50,7 +51,11 @@ export async function getMe(req, res) {
     if (!u) return err(res, 'User not found', 404, 'not_found');
     const chats = await listChatsForUser(req.userId);
     const connectedUserIds = communityConnectedUserIdsFromChats(chats, req.userId);
-    return ok(res, { ...userMe(u), connectedUserIds });
+    return ok(res, {
+      ...userMe(u),
+      connectedUserIds,
+      isAdmin: actorIsAdmin(req),
+    });
   } catch (_e) {
     return err(res, 'Internal error', 500, 'internal');
   }
@@ -60,7 +65,16 @@ export async function patchMe(req, res) {
   try {
     const u = await getUserById(req.userId);
     if (!u) return err(res, 'User not found', 404, 'not_found');
-    const { bio, alias, location } = req.body ?? {};
+    const { bio, alias, location, listInCommunityDirectory } = req.body ?? {};
+    if (listInCommunityDirectory !== undefined) {
+      if (typeof listInCommunityDirectory !== 'boolean') {
+        return err(res, 'listInCommunityDirectory must be a boolean', 400, 'validation_error');
+      }
+      if (!actorIsAdmin(req)) {
+        return err(res, 'Only admins can change community directory visibility', 403, 'forbidden');
+      }
+      u.listInCommunityDirectory = listInCommunityDirectory;
+    }
     if (bio !== undefined) {
       if (typeof bio !== 'string') return err(res, 'bio must be a string', 400, 'validation_error');
       u.bio = bio.trim() || null;
@@ -78,7 +92,7 @@ export async function patchMe(req, res) {
       u.location = location === null || !String(location).trim() ? null : String(location).trim();
     }
     await upsertUser(u);
-    return ok(res, userMe(u));
+    return ok(res, { ...userMe(u), isAdmin: actorIsAdmin(req) });
   } catch (_e) {
     return err(res, 'Internal error', 500, 'internal');
   }

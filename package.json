@@ -5,7 +5,7 @@
   "type": "module",
   "main": "firebaseEntry.js",
   "scripts": {
-    "test": "node --import ./tests/setup-env.mjs --test tests/chatCreate.integration.test.js tests/chats.http.test.js tests/communityMembers.test.js tests/createChatBody.test.js tests/userConnections.test.js tests/users.http.test.js",
+    "test": "node --import ./tests/setup-env.mjs --test tests/chatCreate.integration.test.js tests/chats.http.test.js tests/communityMembers.test.js tests/communityAdmin.http.test.js tests/createChatBody.test.js tests/userConnections.test.js tests/users.http.test.js",
     "postman:check": "node scripts/check-postman-routes.mjs",
     "start": "node index.js",
     "dev": "nodemon index.js",

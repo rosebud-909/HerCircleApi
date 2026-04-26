@@ -52,6 +52,7 @@ export function userMe(u) {
     ...(verificationData ? { verificationData } : {}),
     verifiedAt: u.verifiedAt ?? null,
     createdAt: u.createdAt,
+    listInCommunityDirectory: u.listInCommunityDirectory === true,
   };
 }
 

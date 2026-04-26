@@ -1,3 +1,4 @@
+import { buildAdminFlagsMap } from '../lib/adminFlags.js';
 import { communityDiscoverableLimit } from '../lib/communityDiscoverLimit.js';
 import { chatPairKey } from '../lib/chatPairKey.js';
 import { parseCreateChatBody } from '../lib/createChatBody.js';
@@ -114,8 +115,9 @@ export async function runCreateChat(userId, body, options = {}) {
     typeof options.discoverableMemberLimit === 'number'
       ? options.discoverableMemberLimit
       : communityDiscoverableLimit();
-  const discoverOpts = { limit };
   const allUsers = await listUsers();
+  const adminFlags = options.adminFlags ?? (await buildAdminFlagsMap(allUsers));
+  const discoverOpts = { limit, adminFlags };
   if (!peerIdIsDiscoverableForCommunity(allUsers, userId, peerUserId, discoverOpts)) {
     return {
       success: false,
