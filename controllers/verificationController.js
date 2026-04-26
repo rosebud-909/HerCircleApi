@@ -53,6 +53,28 @@ async function uploadVerificationImage({ userId, kind, file, submittedAt }) {
   return { bucket: bucket.name, path: objectPath, contentType, size: file.size };
 }
 
+async function cleanupPreviousVerificationFiles(user) {
+  const prev = user?._verification?.files;
+  if (!prev) return;
+  const paths = [
+    prev.governmentIdFront?.path,
+    prev.governmentIdBack?.path,
+    prev.selfieImage?.path,
+  ].filter((p) => typeof p === 'string' && p.trim());
+
+  if (paths.length === 0) return;
+
+  const bucket = getFirebaseAdminStorageBucket();
+  await Promise.all(
+    paths.map((p) =>
+      bucket
+        .file(String(p))
+        .delete({ ignoreNotFound: true })
+        .catch(() => null),
+    ),
+  );
+}
+
 export async function submitVerification(req, res) {
   try {
     const files = req.files ?? {};
@@ -97,6 +119,10 @@ export async function submitVerification(req, res) {
     if (!front?.buffer || !back?.buffer || !selfie?.buffer) {
       return err(res, 'File uploads missing data', 400, 'validation_error');
     }
+
+    // Best-effort cleanup so users don't accumulate old verification docs in Storage.
+    // (ignore not found / permission errors to avoid blocking submissions)
+    await cleanupPreviousVerificationFiles(u);
 
     // Upload images to Firebase Storage (manual verification workflow).
     let frontObj;
