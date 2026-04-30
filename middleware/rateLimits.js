@@ -90,3 +90,11 @@ export const postalLocationLimiter = rateLimit({
   max: 60,
   keyGenerator: (req) => ipKeyGenerator(req.ip || ''),
 });
+
+/** GET /invites/validate — public; 40 per minute per IP (token probing) */
+export const invitesValidateLimiter = rateLimit({
+  ...common,
+  windowMs: 60 * 1000,
+  max: 40,
+  keyGenerator: (req) => ipKeyGenerator(req.ip || ''),
+});

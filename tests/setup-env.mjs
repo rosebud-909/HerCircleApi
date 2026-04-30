@@ -4,5 +4,6 @@
  */
 process.env.USE_FIRESTORE = 'false';
 process.env.ALLOW_TEST_AUTH = 'true';
+process.env.INVITE_ONLY = 'false';
 delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 delete process.env.GOOGLE_APPLICATION_CREDENTIALS;

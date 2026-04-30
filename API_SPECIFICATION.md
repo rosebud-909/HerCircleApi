@@ -5,7 +5,7 @@
 
 **Base URL:** `/api/v1`
 
-All endpoints require `Authorization: Bearer <firebase_id_token>` unless noted otherwise.
+All endpoints require `Authorization: Bearer <firebase_id_token>` unless noted otherwise (e.g. `GET /invites/validate` is public).
 
 **Authentication:** Firebase Auth ID tokens. The backend should verify tokens using the Firebase Admin SDK.
 
@@ -40,7 +40,8 @@ Register a new user profile after Firebase Auth account creation. *(Called after
   "firebaseUid": "abc123xyz",
   "name": "Sarah Johnson",
   "email": "sarah@example.com",
-  "location": "West Loop, Chicago"
+  "location": "West Loop, Chicago",
+  "inviteToken": "optional_when_invite_only"
 }
 ```
 
@@ -50,6 +51,10 @@ Register a new user profile after Firebase Auth account creation. *(Called after
 | `name` | string | ✅ |
 | `email` | string | ✅ |
 | `location` | string | ✅ |
+| `inviteToken` | string | ❌* |
+| `invite` | string | ❌* |
+
+\* When the server runs in **invite-only** mode (default unless `INVITE_ONLY=false`), **creating a new profile** requires a valid `inviteToken` or `invite` (same value). Omitted or invalid tokens yield **403** (`invite_required`, `invalid_invite`, or `invite_cap_reached`). Existing profiles updating via this route keep their stored `invitedByUserId`.
 
 **Response (201):**
 ```json
@@ -78,7 +83,8 @@ Register or retrieve a user profile after Google OAuth sign-in. Creates a profil
   "firebaseUid": "google_abc123",
   "name": "Sarah Johnson",
   "email": "sarah.johnson@gmail.com",
-  "photoUrl": "https://lh3.googleusercontent.com/..."
+  "photoUrl": "https://lh3.googleusercontent.com/...",
+  "inviteToken": "optional_when_invite_only"
 }
 ```
 
@@ -88,6 +94,10 @@ Register or retrieve a user profile after Google OAuth sign-in. Creates a profil
 | `name` | string | ✅ |
 | `email` | string | ✅ |
 | `photoUrl` | string | ❌ |
+| `inviteToken` | string | ❌* |
+| `invite` | string | ❌* |
+
+\* Same invite-only rules as `POST /auth/register` for **new** profiles (`invite_required` / `invalid_invite` / `invite_cap_reached` on **403**).
 
 **Response (200 or 201):**
 ```json
@@ -106,6 +116,39 @@ Register or retrieve a user profile after Google OAuth sign-in. Creates a profil
 ```
 
 When `photoUrl` was sent on input, persist it as **`avatarUrl`** on the user row when creating or updating the profile so `GET /users/me` stays consistent.
+
+---
+
+## 🎟 Invites (public validation)
+
+### `GET /invites/validate`
+
+**No `Authorization` header.** Used before signup to learn whether invites are required and whether a given token is acceptable.
+
+**Query parameters**
+
+| Param | Required | Notes |
+|-------|----------|--------|
+| `token` | ❌ | Invite string from a member link (`?invite=`) or, when configured, the server’s `INVITE_BOOTSTRAP_TOKEN`. |
+
+**Response (200):**
+```json
+{
+  "data": {
+    "inviteRequired": true,
+    "valid": true
+  }
+}
+```
+
+| Field | Meaning |
+|-------|--------|
+| `inviteRequired` | `false` when the server has invite-only **disabled** (`INVITE_ONLY` set exactly to `false`). Otherwise `true`. |
+| `valid` | When `inviteRequired` is `false`, always `true`. When `inviteRequired` is `true`: `false` if `token` is missing, fails plausibility (length/charset), unknown, or the inviter has reached their non-admin cap; `true` for a usable invite or matching bootstrap token. |
+
+Implausible tokens (e.g. too short or non–base64url-safe characters) are rejected without indicating whether a user exists.
+
+**Rate limiting:** 40 requests per minute per IP.
 
 ---
 
@@ -150,8 +193,42 @@ Get the current user's full profile.
 | Field | Notes |
 |-------|--------|
 | `avatarUrl` | Optional. Public HTTPS URL for profile image. Omitted when unset. |
+| `invitedByUserId` | Present when this account was created via another member’s invite. |
 
 `connectedUserIds` (optional): user ids the current user has **community-connected** with (for “Connected” badges on Community). Can be omitted if the client derives connections from `GET /chats` instead.
+
+---
+
+### `GET /users/me/invite`
+
+Returns the signed-in user’s **invite token**, a ready-to-share path, invite usage vs cap, and **invitees** (users who joined with this member’s link). Each entry in `invitees` uses the same limited fields as `GET /users/:id` (public profile).
+
+**Response (200):**
+```json
+{
+  "data": {
+    "inviteToken": "base64url_token",
+    "sharePath": "/signup?invite=base64url_token",
+    "invitesUsed": 1,
+    "invitesMax": 5,
+    "invitees": [
+      {
+        "id": "peer_uid",
+        "name": "Alex",
+        "alias": null,
+        "location": null,
+        "bio": null,
+        "verificationStatus": "unverified",
+        "createdAt": "2026-04-10T12:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `invitesMax` | `null` for **admin** accounts (no member invite cap). Otherwise typically `5` for non-admin inviters. |
 
 ---
 
@@ -795,13 +872,48 @@ Get active SOS alerts near the current user (for community awareness).
 
 ---
 
+## 👑 Admin
+
+### `GET /admin/users`
+
+**Admin only** — requires `Authorization: Bearer` and an admin account.
+
+Returns **all** users for directory / support tooling. Each element extends the public user shape with **`email`**, **`invitedByUserId`** (who invited them, if any), and **`isAdmin`**.
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "abc123xyz",
+      "name": "Sarah Johnson",
+      "alias": null,
+      "location": "West Loop, Chicago",
+      "bio": null,
+      "verificationStatus": "verified",
+      "createdAt": "2026-04-08T12:00:00.000Z",
+      "email": "sarah@example.com",
+      "invitedByUserId": null,
+      "isAdmin": true
+    }
+  ]
+}
+```
+
+**403** when the caller is not an admin.
+
+---
+
 ## 📊 Endpoint Summary
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/auth/register` | Register user profile after Firebase signup |
 | `POST` | `/auth/google` | Register/retrieve profile after Google OAuth |
+| `GET` | `/invites/validate` | Public: whether invites are required; optional `token` check |
 | `GET` | `/users/me` | Current user profile |
+| `GET` | `/users/me/invite` | Invite token, share path, usage/cap, invitees |
+| `GET` | `/admin/users` | Admin: list all users (+ email, invite metadata, `isAdmin`) |
 | `PATCH` | `/users/me` | Update profile (`bio`, `location`, `alias`, `avatarUrl`; see **Profile photo**) |
 | `GET` | `/users/:id` | Public user profile |
 | `POST` | `/verification/submit` | Submit ID verification |
@@ -827,7 +939,7 @@ Get active SOS alerts near the current user (for community awareness).
 
 ### Firebase Auth Integration
 - Backend verifies Firebase ID tokens using `firebase-admin` SDK
-- All endpoints (except `/auth/register` and `/auth/google`) require a valid token
+- All endpoints except `/auth/register`, `/auth/google`, and **`GET /invites/validate`** require a valid token
 - User ID is extracted from the verified token — never trust client-sent user IDs
 
 ### Community & DMs
@@ -846,6 +958,7 @@ Get active SOS alerts near the current user (for community awareness).
 |----------|-------|
 | `/auth/register` | 5 per hour per IP |
 | `/auth/google` | 10 per hour per IP |
+| `GET /invites/validate` | 40 per minute per IP |
 | `/sos` | 3 per hour per user |
 | `/verification/submit` | 3 per day per user |
 | `/chats/:chatId/messages` | 60 per minute per user |

@@ -12,6 +12,8 @@ import {
   fsGetRequest,
   fsGetSos,
   fsGetUser,
+  fsGetUserByInviteToken,
+  fsListUsersInvitedBy,
   fsListUsers,
   fsListActiveSos,
   fsListChatsForUser,
@@ -31,6 +33,29 @@ export { nextId };
 export async function getUserById(userId) {
   if (useFirestore()) return fsGetUser(userId);
   return memoryStore.users.get(userId) ?? null;
+}
+
+export async function getUserByInviteToken(token) {
+  const t = String(token || '').trim();
+  if (!t) return null;
+  if (useFirestore()) return fsGetUserByInviteToken(t);
+  for (const u of memoryStore.users.values()) {
+    if (u.inviteToken === t) return u;
+  }
+  return null;
+}
+
+export async function listUsersInvitedBy(inviterId) {
+  const id = String(inviterId || '').trim();
+  if (!id) return [];
+  if (useFirestore()) return fsListUsersInvitedBy(id);
+  const rows = [...memoryStore.users.values()].filter((u) => u.invitedByUserId === id);
+  rows.sort((a, b) => {
+    const tb = Date.parse(String(b.createdAt || 0));
+    const ta = Date.parse(String(a.createdAt || 0));
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+  return rows;
 }
 
 export async function listUsers() {

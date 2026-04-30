@@ -6,6 +6,7 @@ const router = Router();
 
 router.post('/me', requireAuth, userController.upsertMe);
 router.get('/me', requireAuth, userController.getMe);
+router.get('/me/invite', requireAuth, userController.getMyInvite);
 router.patch('/me', requireAuth, userController.patchMe);
 router.delete('/me', requireAuth, userController.deleteMe);
 router.get('/me/requests', requireAuth, userController.listMyRequestsHandler);

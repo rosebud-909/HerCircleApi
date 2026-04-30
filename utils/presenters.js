@@ -53,6 +53,7 @@ export function userMe(u) {
     verifiedAt: u.verifiedAt ?? null,
     createdAt: u.createdAt,
     listInCommunityDirectory: u.listInCommunityDirectory === true,
+    ...(u.invitedByUserId ? { invitedByUserId: u.invitedByUserId } : {}),
   };
 }
 

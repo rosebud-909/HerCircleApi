@@ -2,7 +2,7 @@
   "info": {
     "name": "HerCircle API (local)",
     "_postman_id": "7c2f0c2b-0c6a-4c6b-9f2a-000000000001",
-    "description": "Import this into Postman.\n\nSet collection variables:\n- baseUrl (default http://localhost:3000)\n- firebaseIdToken (paste a Firebase ID token)\n- exampleUserId / exampleRequestId (IDs from your data, e.g. feed or POST responses)\n\nNotes:\n- Protected routes require: Authorization: Bearer {{firebaseIdToken}}\n- Use the Firebase Auth folder first (signUp or signIn) to populate firebaseIdToken.",
+    "description": "Import this into Postman.\n\nSet collection variables:\n- baseUrl (default http://localhost:3000)\n- firebaseIdToken (paste a Firebase ID token)\n- inviteToken (from a member’s invite link `?invite=` or GET /users/me/invite after sign-in)\n- exampleUserId / exampleRequestId (IDs from your data, e.g. feed or POST responses)\n\nNotes:\n- Protected routes require: Authorization: Bearer {{firebaseIdToken}}\n- Use the Firebase Auth folder first (signUp or signIn) to populate firebaseIdToken.\n- GET /invites/validate is public (no Bearer).\n- New email signup when INVITE_ONLY is on: include `\"inviteToken\": \"{{inviteToken}}\"` on POST /auth/register (and similar for Google body if used).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -15,7 +15,9 @@
     { "key": "exampleRequestId", "value": "" },
     { "key": "peerUserId", "value": "" },
     { "key": "chatId", "value": "" },
-    { "key": "sosId", "value": "" }
+    { "key": "sosId", "value": "" },
+    { "key": "inviteToken", "value": "" },
+    { "key": "adminVerificationFileKind", "value": "governmentIdFront" }
   ],
   "item": [
     {
@@ -106,6 +108,25 @@
       ]
     },
     {
+      "name": "Invites (public — no Bearer)",
+      "item": [
+        {
+          "name": "GET /api/v1/invites/validate",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invites/validate?token={{inviteToken}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "invites", "validate"],
+              "query": [{ "key": "token", "value": "{{inviteToken}}", "description": "Leave empty to probe “invite required” without a token; set inviteToken to validate a real invite." }]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Auth / Profile",
       "item": [
         {
@@ -119,7 +140,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Sarah Johnson\",\n  \"email\": \"sarah@example.com\"\n}"
+              "raw": "{\n  \"name\": \"Sarah Johnson\",\n  \"email\": \"sarah@example.com\",\n  \"inviteToken\": \"{{inviteToken}}\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/auth/register"
           }
@@ -135,7 +156,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Sarah Johnson\",\n  \"email\": \"sarah.johnson@gmail.com\"\n}"
+              "raw": "{\n  \"name\": \"Sarah Johnson\",\n  \"email\": \"sarah.johnson@gmail.com\",\n  \"inviteToken\": \"{{inviteToken}}\"\n}"
             },
             "url": "{{baseUrl}}/api/v1/auth/google"
           }
@@ -166,6 +187,18 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/users/me"
+          }
+        },
+        {
+          "name": "GET /api/v1/users/me/invite (link + invitees)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/me/invite"
           }
         },
         {
@@ -373,6 +406,109 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/verification/status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin (admin Bearer only)",
+      "item": [
+        {
+          "name": "GET /api/v1/admin/users (directory + invites)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/admin/users"
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/verification/pending",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/verification/pending?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "verification", "pending"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/verification/decisions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/verification/decisions?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "verification", "decisions"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/verification/:userId",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/verification/{{exampleUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "verification", "{{exampleUserId}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/admin/verification/:userId/file/:kind",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/verification/{{exampleUserId}}/file/{{adminVerificationFileKind}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "verification", "{{exampleUserId}}", "file", "{{adminVerificationFileKind}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/admin/verification/:userId (decide)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{firebaseIdToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"verified\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/verification/{{exampleUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "verification", "{{exampleUserId}}"]
+            }
           }
         }
       ]

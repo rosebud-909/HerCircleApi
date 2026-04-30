@@ -35,6 +35,28 @@ export async function fsGetUser(userId) {
   return { id: snap.id, ...snap.data() };
 }
 
+export async function fsGetUserByInviteToken(token) {
+  const t = String(token || '').trim();
+  if (!t) return null;
+  const qs = await db().collection(USERS).where('inviteToken', '==', t).limit(1).get();
+  if (qs.empty) return null;
+  const d = qs.docs[0];
+  return { id: d.id, ...d.data() };
+}
+
+export async function fsListUsersInvitedBy(inviterId) {
+  const id = String(inviterId || '').trim();
+  if (!id) return [];
+  const qs = await db().collection(USERS).where('invitedByUserId', '==', id).limit(50).get();
+  const rows = qs.docs.map((d) => ({ id: d.id, ...d.data() }));
+  rows.sort((a, b) => {
+    const tb = Date.parse(String(b.createdAt || 0));
+    const ta = Date.parse(String(a.createdAt || 0));
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+  return rows;
+}
+
 export async function fsUpsertUser(user) {
   const ref = db().collection(USERS).doc(String(user.id));
   await ref.set(user, { merge: true });

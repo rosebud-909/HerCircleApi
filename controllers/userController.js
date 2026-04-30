@@ -1,7 +1,9 @@
 import { actorIsAdmin } from '../middleware/admin.js';
 import { getFirebaseAdminAuth } from '../firebaseAdmin.js';
 import { deleteUserOwnedStorageObjects } from '../services/deleteUserStorage.js';
-import { getUserById, listChatsForUser, listMyRequests, listUsers, purgeUserAccountData, upsertUser } from '../store.js';
+import { generateInviteToken } from '../lib/inviteToken.js';
+import { NON_ADMIN_INVITE_CAP, resolveInviteForNewProfile } from '../services/inviteEligibility.js';
+import { getUserById, listChatsForUser, listMyRequests, listUsers, listUsersInvitedBy, purgeUserAccountData, upsertUser } from '../store.js';
 import { communityConnectedUserIdsFromChats } from '../services/userConnections.js';
 import { ok, err } from '../utils/http.js';
 import { userMe, userPublic } from '../utils/presenters.js';
@@ -15,6 +17,18 @@ export async function upsertMe(req, res) {
 
     const now = new Date().toISOString();
     const existing = await getUserById(req.userId);
+    let invitedByUserId = existing?.invitedByUserId ?? null;
+    if (!existing) {
+      try {
+        const inv = await resolveInviteForNewProfile(req.body ?? {});
+        invitedByUserId = inv.invitedByUserId;
+      } catch (e) {
+        const status = e && typeof e.status === 'number' ? e.status : 403;
+        const code = e && typeof e.code === 'string' ? e.code : 'forbidden';
+        const msg = e instanceof Error ? e.message : 'Invitation required';
+        return err(res, msg, status, code);
+      }
+    }
     const user = existing ?? {
       id: req.userId,
       name: name.trim(),
@@ -25,6 +39,8 @@ export async function upsertMe(req, res) {
       verificationStatus: 'unverified',
       verifiedAt: null,
       createdAt: now,
+      invitedByUserId,
+      inviteToken: generateInviteToken(),
     };
 
     user.name = name.trim();
@@ -40,6 +56,10 @@ export async function upsertMe(req, res) {
       user.email = req.firebase.email;
     }
 
+    if (user.inviteToken == null || user.inviteToken === '') {
+      user.inviteToken = generateInviteToken();
+    }
+
     await upsertUser(user);
     return ok(res, userMe(user), existing ? 200 : 201);
   } catch (_e) {
@@ -49,8 +69,12 @@ export async function upsertMe(req, res) {
 
 export async function getMe(req, res) {
   try {
-    const u = await getUserById(req.userId);
+    let u = await getUserById(req.userId);
     if (!u) return err(res, 'User not found', 404, 'not_found');
+    if (u.inviteToken == null || u.inviteToken === '') {
+      u = { ...u, inviteToken: generateInviteToken() };
+      await upsertUser(u);
+    }
     const chats = await listChatsForUser(req.userId);
     const connectedUserIds = communityConnectedUserIdsFromChats(chats, req.userId);
     return ok(res, {
@@ -95,6 +119,29 @@ export async function patchMe(req, res) {
     }
     await upsertUser(u);
     return ok(res, { ...userMe(u), isAdmin: actorIsAdmin(req) });
+  } catch (_e) {
+    return err(res, 'Internal error', 500, 'internal');
+  }
+}
+
+export async function getMyInvite(req, res) {
+  try {
+    let u = await getUserById(req.userId);
+    if (!u) return err(res, 'User not found', 404, 'not_found');
+    if (u.inviteToken == null || u.inviteToken === '') {
+      u = { ...u, inviteToken: generateInviteToken() };
+      await upsertUser(u);
+    }
+    const invitees = await listUsersInvitedBy(req.userId);
+    const invitesUsed = invitees.length;
+    const admin = actorIsAdmin(req);
+    return ok(res, {
+      inviteToken: u.inviteToken,
+      sharePath: `/signup?invite=${encodeURIComponent(u.inviteToken)}`,
+      invitesUsed,
+      invitesMax: admin ? null : NON_ADMIN_INVITE_CAP,
+      invitees: invitees.map((row) => userPublic(row)),
+    });
   } catch (_e) {
     return err(res, 'Internal error', 500, 'internal');
   }
